@@ -206,14 +206,35 @@
       <div class="kpi"><div class="kpi-label">Total Lines</div><div class="kpi-value" id="kpiTotal">0</div></div>
       <div class="kpi"><div class="kpi-label">Errors</div><div class="kpi-value danger" id="kpiErrors">0</div></div>
       <div class="kpi"><div class="kpi-label">Warnings</div><div class="kpi-value warn" id="kpiWarnings">0</div></div>
-      <div class="kpi"><div class="kpi-label">Screenshots</div><div class="kpi-value" id="kpiScreenshots">0</div></div>
-      <div class="kpi"><div class="kpi-label">Network Issues</div><div class="kpi-value warn" id="kpiNetwork">0</div></div>
-      <div class="kpi"><div class="kpi-label">Time Span</div><div class="kpi-value" id="kpiTimeSpan">--</div></div>
+      <div class="kpi"><div class="kpi-label">Tracked Time</div><div class="kpi-value success" id="kpiTrackedTime">0:00:00</div></div>
+      <div class="kpi"><div class="kpi-label">Idle Kept</div><div class="kpi-value" id="kpiIdleKept">0:00:00</div></div>
+      <div class="kpi"><div class="kpi-label">Idle Discarded</div><div class="kpi-value warn" id="kpiIdleDisc">0:00:00</div></div>
+      <div class="kpi"><div class="kpi-label">Timezone</div><div class="kpi-value" id="kpiTimezone">--</div></div>
+      <div class="kpi"><div class="kpi-label">Log Time Span</div><div class="kpi-value" id="kpiTimeSpan">--</div></div>
     </div>
 
     <div class="card" id="summaryCard" style="display:none; border-left: 3px solid var(--accent);">
       <div class="section-title"><span>📋</span> Quick Summary for Support</div>
       <div id="summaryContent"></div>
+    </div>
+
+    <div class="card" id="sessionsCard" style="display:none;">
+      <div class="section-title"><span>⏱️</span> Tracking Sessions</div>
+      <div class="table-wrap" style="max-height:300px;">
+        <table>
+          <thead><tr><th>#</th><th>Start</th><th>Stop</th><th>Duration</th><th>Stop Reason</th></tr></thead>
+          <tbody id="sessionsBody"></tbody>
+        </table>
+      </div>
+      <div style="margin-top:12px; padding-top:12px; border-top:1px dashed var(--border);">
+        <div class="section-title" style="margin-bottom:8px;"><span>💤</span> Idle Time Decisions</div>
+        <div class="table-wrap" style="max-height:200px;">
+          <table>
+            <thead><tr><th>Time</th><th>Idle Duration</th><th>Decision</th></tr></thead>
+            <tbody id="idleBody"></tbody>
+          </table>
+        </div>
+      </div>
     </div>
 
     <div class="card timeline-section" id="timelineSection" style="display:none;">
@@ -458,6 +479,38 @@
       return new Date(`${m[1]}T${m[2]}`);
     }
 
+    function parseTimezone(line) {
+      // Check for explicit TZ Offset line (e.g., "TZ Offset  : 05:30:00" or "TZ Offset  : -05:30:00")
+      const tzOffsetMatch = line.match(/TZ Offset\s*:\s*(-?)(\d{2}):(\d{2})/i);
+      if (tzOffsetMatch) {
+        const sign = tzOffsetMatch[1] === '-' ? '-' : '+';
+        return `${sign}${tzOffsetMatch[2]}:${tzOffsetMatch[3]}`;
+      }
+      
+      // Check for timestamp suffix timezone (e.g., "+0530" or "-08:00")
+      const m = line.match(/([+-]\d{2}:?\d{2})\s*$/);
+      if (m) {
+        let tz = m[1];
+        if (!tz.includes(':')) tz = tz.slice(0,3) + ':' + tz.slice(3);
+        return tz;
+      }
+      const m2 = line.match(/\s([+-]\d{4})\s/);
+      if (m2) {
+        const tz = m2[1];
+        return tz.slice(0,3) + ':' + tz.slice(3);
+      }
+      return null;
+    }
+
+    function fmtDuration(secs) {
+      if (!secs || secs < 0) return '0:00:00';
+      secs = Math.floor(secs);
+      const h = Math.floor(secs / 3600);
+      const m = Math.floor((secs % 3600) / 60);
+      const s = secs % 60;
+      return `${h}:${pad(m)}:${pad(s)}`;
+    }
+
     function parseLevel(line) {
       if (line.includes('[ERROR]')) return 'ERROR';
       if (line.includes('[WARN]')) return 'WARN';
@@ -577,6 +630,52 @@
 
     function generateSummary(data) {
       const findings = [];
+      
+      // === TRACKING SUMMARY ===
+      const totalTrackedSecs = data.sessions.reduce((sum, s) => sum + (s.duration || 0), 0);
+      if (data.sessions.length > 0) {
+        const crashedSessions = data.sessions.filter(s => s.stopReason === 'CRASHED' || s.stopReason === 'LOG_END');
+        const idleStops = data.sessions.filter(s => s.stopReason === 'IDLE');
+        const resumedStarts = data.sessions.filter(s => s.startReason === 'RESUMED');
+        
+        let sessionDesc = `Found ${data.sessions.length} tracking session${data.sessions.length > 1 ? 's' : ''} totaling ${fmtDuration(totalTrackedSecs)}.`;
+        if (resumedStarts.length > 0) sessionDesc += ` ${resumedStarts.length} session(s) were recovered after a crash.`;
+        if (idleStops.length > 0) sessionDesc += ` ${idleStops.length} stopped due to idle timeout.`;
+        
+        findings.push({
+          severity: crashedSessions.length > 0 ? 'warning' : 'info',
+          icon: '⏱️',
+          title: `Tracked Time: ${fmtDuration(totalTrackedSecs)}`,
+          description: sessionDesc,
+          action: crashedSessions.length > 0 ? 'Some sessions may have ended unexpectedly. Check the Sessions table below for details.' : null,
+          techDetail: null
+        });
+      }
+      
+      // === IDLE SUMMARY ===
+      if (data.idleKeptSecs > 0 || data.idleDiscardedSecs > 0) {
+        const totalIdle = data.idleKeptSecs + data.idleDiscardedSecs;
+        findings.push({
+          severity: 'info',
+          icon: '💤',
+          title: `Idle Time: ${fmtDuration(totalIdle)}`,
+          description: `User went idle ${data.idleDecisions.length} time(s). Kept ${fmtDuration(data.idleKeptSecs)}, discarded ${fmtDuration(data.idleDiscardedSecs)}.`,
+          action: data.idleDiscardedSecs > 0 ? 'Discarded idle time does not count toward tracked hours.' : null,
+          techDetail: null
+        });
+      }
+
+      // === TIMEZONE ===
+      if (data.timezone) {
+        findings.push({
+          severity: 'info',
+          icon: '🌍',
+          title: `Timezone: UTC${data.timezone}`,
+          description: `User's computer timezone offset detected from logs.`,
+          action: null,
+          techDetail: null
+        });
+      }
       
       // Check for critical issues
       const watchdogHits = data.errors.filter(e => e.msg.toLowerCase().includes('watchdog'));
@@ -816,12 +915,21 @@
         locations: [],
         apps: [],
         tracking: [],
+        sessions: [],
+        idleDecisions: [],
+        idleKeptSecs: 0,
+        idleDiscardedSecs: 0,
+        timezone: null,
         startTime: null,
         endTime: null
       };
 
       const showDebug = $('showDebug').checked;
       const showTrace = $('showTrace').checked;
+      
+      let openSession = null;
+      let lastIdleWakeSecs = null;
+      let lastIdleWakeTime = null;
 
       for (const line of lines) {
         const ts = parseTimestamp(line);
@@ -834,10 +942,87 @@
           if (!data.endTime || ts > data.endTime) data.endTime = ts;
         }
 
+        // Extract timezone from first line that has one
+        if (!data.timezone) {
+          const tz = parseTimezone(line);
+          if (tz) data.timezone = tz;
+        }
+        
+        // Also check for TZ Offset line specifically (higher priority)
+        if (line.includes('TZ Offset')) {
+          const tz = parseTimezone(line);
+          if (tz) data.timezone = tz;
+        }
+
         if (!showDebug && level === 'DEBUG') continue;
         if (!showTrace && level === 'TRACE') continue;
 
         const entry = { ts, level, src, msg, raw: line };
+
+        // === SESSION TRACKING (START/STOP) ===
+        if (line.includes('START_TRACKING') || line.includes('Tracking Started')) {
+          let reason = 'USER';
+          if (line.includes('[RESUMED]') || line.toLowerCase().includes('resumed')) reason = 'RESUMED';
+          else if (line.includes('[IDLE]')) reason = 'IDLE';
+          
+          if (openSession) {
+            // Unclosed session - mark as crashed
+            openSession.stop = ts;
+            openSession.stopReason = 'CRASHED';
+            openSession.duration = (openSession.stop - openSession.start) / 1000;
+            data.sessions.push(openSession);
+          }
+          openSession = { start: ts, startReason: reason, stop: null, stopReason: null, duration: 0 };
+        }
+        
+        if (line.includes('STOP_TRACKING') || line.includes('Tracking Stopped')) {
+          let reason = 'USER';
+          if (line.includes('[IDLE]')) reason = 'IDLE';
+          else if (line.includes('[CONFIGURATION]')) reason = 'CONFIG';
+          else if (line.includes('[PROJECT_CONFIGURATION_LOCATION]')) reason = 'LEFT_JOBSITE';
+          else if (line.includes('[SHUTDOWN]')) reason = 'SHUTDOWN';
+          
+          if (openSession) {
+            openSession.stop = ts;
+            openSession.stopReason = reason;
+            openSession.duration = (openSession.stop - openSession.start) / 1000;
+            data.sessions.push(openSession);
+            openSession = null;
+          }
+        }
+
+        // === IDLE TRACKING ===
+        // Capture IDLE_WAKE seconds
+        if (line.includes('IDLE_WAKE') || (line.includes('Idle') && line.includes('wake'))) {
+          const secsMatch = line.match(/(?:after|for)\s+(\d+)\s+seconds?/i);
+          if (secsMatch) {
+            lastIdleWakeSecs = parseInt(secsMatch[1]);
+            lastIdleWakeTime = ts;
+          }
+        }
+        
+        // Capture idle decisions (KeepIdle / StopTracking)
+        if (line.includes('KeepIdle') || line.includes('StopTracking')) {
+          const keepMatch = line.match(/KeepIdle[:\s]+(\d+)/i);
+          const stopMatch = line.match(/StopTracking[:\s]+(\d+)/i);
+          
+          const kept = keepMatch && keepMatch[1] === '1';
+          const discarded = stopMatch && stopMatch[1] === '1';
+          
+          if (kept || discarded) {
+            const idleSecs = lastIdleWakeSecs || 0;
+            data.idleDecisions.push({
+              ts: ts,
+              seconds: idleSecs,
+              decision: kept ? 'KEPT' : 'DISCARDED'
+            });
+            
+            if (kept) data.idleKeptSecs += idleSecs;
+            else if (discarded) data.idleDiscardedSecs += idleSecs;
+            
+            lastIdleWakeSecs = null;
+          }
+        }
 
         // Errors
         if (level === 'ERROR' || line.includes('main_watchdog hit') || line.includes('Helper died') || line.includes('crash') || line.includes('FATAL')) {
@@ -890,8 +1075,10 @@
         $('kpiTotal').textContent = '0';
         $('kpiErrors').textContent = '0';
         $('kpiWarnings').textContent = '0';
-        $('kpiScreenshots').textContent = '0';
-        $('kpiNetwork').textContent = '0';
+        $('kpiTrackedTime').textContent = '0:00:00';
+        $('kpiIdleKept').textContent = '0:00:00';
+        $('kpiIdleDisc').textContent = '0:00:00';
+        $('kpiTimezone').textContent = '--';
         $('kpiTimeSpan').textContent = '--';
         $('errorsList').innerHTML = '<div class="event-item" style="color:var(--muted)">No errors found</div>';
         $('warningsList').innerHTML = '<div class="event-item" style="color:var(--muted)">No warnings found</div>';
@@ -902,14 +1089,23 @@
         $('trackingBody').innerHTML = '';
         $('searchBody').innerHTML = '';
         $('summaryCard').style.display = 'none';
+        $('sessionsCard').style.display = 'none';
+        $('sessionsBody').innerHTML = '';
+        $('idleBody').innerHTML = '';
         return;
       }
+
+      // Calculate total tracked time
+      const totalTrackedSecs = data.sessions.reduce((sum, s) => sum + (s.duration || 0), 0);
 
       $('kpiTotal').textContent = data.total.toLocaleString();
       $('kpiErrors').textContent = data.errors.length;
       $('kpiWarnings').textContent = data.warnings.length;
-      $('kpiScreenshots').textContent = data.screenshots.length;
-      $('kpiNetwork').textContent = data.network.length;
+      $('kpiTrackedTime').textContent = fmtDuration(totalTrackedSecs);
+      $('kpiIdleKept').textContent = fmtDuration(data.idleKeptSecs);
+      $('kpiIdleDisc').textContent = fmtDuration(data.idleDiscardedSecs);
+      $('kpiTimezone').textContent = data.timezone || 'Unknown';
+      $('kpiTimezone').style.fontSize = data.timezone ? '18px' : '14px';
 
       if (data.startTime && data.endTime) {
         const diffMs = data.endTime - data.startTime;
@@ -934,6 +1130,57 @@
         `).join('');
       } else {
         $('summaryCard').style.display = 'none';
+      }
+
+      // === RENDER SESSIONS TABLE ===
+      if (data.sessions.length > 0) {
+        $('sessionsCard').style.display = 'block';
+        $('sessionsBody').innerHTML = data.sessions.map((s, i) => {
+          const stopReasonCls = s.stopReason === 'USER' ? 'success' : 
+                                s.stopReason === 'IDLE' ? 'warn' : 
+                                s.stopReason === 'CRASHED' || s.stopReason === 'LOG_END' ? 'error' :
+                                s.stopReason === 'CONFIG' || s.stopReason === 'LEFT_JOBSITE' ? 'error' : 'info';
+          const startReasonBadge = s.startReason === 'RESUMED' ? '<span class="tag audit" style="margin-left:4px;">RESUMED</span>' : '';
+          
+          let stopReasonText = s.stopReason;
+          if (plainMode) {
+            if (s.stopReason === 'USER') stopReasonText = 'User stopped';
+            else if (s.stopReason === 'IDLE') stopReasonText = 'Went idle';
+            else if (s.stopReason === 'CRASHED') stopReasonText = '⚠️ Crashed';
+            else if (s.stopReason === 'LOG_END') stopReasonText = '⚠️ Still running?';
+            else if (s.stopReason === 'CONFIG') stopReasonText = 'Config/Limit';
+            else if (s.stopReason === 'LEFT_JOBSITE') stopReasonText = '📍 Left Job Site';
+            else if (s.stopReason === 'SHUTDOWN') stopReasonText = 'App closed';
+          }
+          
+          return `<tr>
+            <td>${i + 1}${startReasonBadge}</td>
+            <td>${fmtTime(s.start)}</td>
+            <td>${s.stop ? fmtTime(s.stop) : '--'}</td>
+            <td><span class="tag success">${fmtDuration(s.duration)}</span></td>
+            <td><span class="tag ${stopReasonCls}">${stopReasonText}</span></td>
+          </tr>`;
+        }).join('');
+      } else {
+        $('sessionsCard').style.display = 'block';
+        $('sessionsBody').innerHTML = '<tr><td colspan="5" style="color:var(--muted)">No tracking sessions found in log</td></tr>';
+      }
+
+      // === RENDER IDLE DECISIONS TABLE ===
+      if (data.idleDecisions.length > 0) {
+        $('idleBody').innerHTML = data.idleDecisions.map(d => {
+          const decisionCls = d.decision === 'KEPT' ? 'success' : 'warn';
+          const decisionText = plainMode ? 
+            (d.decision === 'KEPT' ? '✅ Kept the time' : '❌ Discarded') : 
+            d.decision;
+          return `<tr>
+            <td>${fmtTime(d.ts)}</td>
+            <td>${fmtDuration(d.seconds)}</td>
+            <td><span class="tag ${decisionCls}">${decisionText}</span></td>
+          </tr>`;
+        }).join('');
+      } else {
+        $('idleBody').innerHTML = '<tr><td colspan="3" style="color:var(--muted)">No idle decisions recorded</td></tr>';
       }
 
       // Errors
