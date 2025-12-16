@@ -19,7 +19,7 @@
 
     main { padding: 16px; max-width: 1400px; margin: 0 auto; }
 
-    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 16px; overflow: visible; }
 
     .controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
 
@@ -28,7 +28,7 @@
     button.primary { background: linear-gradient(135deg, var(--accent-dim) 0%, var(--accent) 100%); border-color: var(--accent); }
     button.primary:hover { opacity: 0.9; }
 
-    textarea { width: 100%; height: 150px; background: #050208; color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 12px; font-family: monospace; font-size: 11px; resize: vertical; }
+    textarea { width: 100%; height: 150px; background: #050208; color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 12px; font-family: monospace; font-size: 11px; resize: vertical; position: relative; z-index: 1; }
     textarea:focus { outline: none; border-color: var(--accent-dim); }
 
     .status { font-size: 12px; color: var(--muted); margin-left: 8px; }
@@ -52,10 +52,11 @@
       padding: 10px 12px; 
       font-size: 11px; 
       color: var(--text); 
-      width: 240px; 
-      z-index: 100; 
+      width: 260px; 
+      z-index: 1000; 
       box-shadow: 0 4px 20px rgba(0,0,0,0.5);
       line-height: 1.5;
+      pointer-events: none;
     }
     .has-tooltip .tooltip::after {
       content: '';
@@ -66,15 +67,15 @@
       border: 6px solid transparent;
       border-top-color: var(--accent);
     }
+    .has-tooltip .tooltip.tooltip-bottom {
+      bottom: auto;
+      top: calc(100% + 8px);
+    }
     .has-tooltip .tooltip.tooltip-bottom::after {
       top: auto;
       bottom: 100%;
       border-top-color: transparent;
       border-bottom-color: var(--accent);
-    }
-    .has-tooltip .tooltip.tooltip-bottom {
-      bottom: auto;
-      top: calc(100% + 8px);
     }
     .has-tooltip:hover .tooltip { display: block; }
     
@@ -202,6 +203,48 @@
     .close-btn { float: right; background: var(--panel); border: 1px solid var(--border); color: var(--text); padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; }
     .close-btn:hover { border-color: var(--accent-dim); }
 
+    .filter-stats-box {
+      margin-top: 10px;
+      padding: 10px 14px;
+      background: rgba(168,85,247,0.1);
+      border: 1px solid var(--accent-dim);
+      border-radius: 8px;
+      font-size: 12px;
+    }
+    .filter-stats-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: var(--text);
+    }
+    .filter-toggle {
+      color: var(--accent);
+      cursor: pointer;
+      text-decoration: underline;
+      font-size: 11px;
+    }
+    .filter-toggle:hover { color: var(--link); }
+    .filter-details {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px dashed var(--border);
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .filter-details ul {
+      margin: 8px 0 8px 20px;
+    }
+    .filter-details li {
+      margin: 4px 0;
+    }
+    .filter-details code {
+      background: var(--bg);
+      padding: 1px 5px;
+      border-radius: 3px;
+      color: var(--link);
+      font-size: 10px;
+    }
+
     .search-box { display: flex; gap: 8px; margin-bottom: 12px; }
     .search-box input { flex: 1; background: #050208; border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; color: var(--text); font-size: 13px; }
     .search-box input:focus { outline: none; border-color: var(--accent-dim); }
@@ -313,8 +356,25 @@
         <label class="has-tooltip"><input type="checkbox" id="showTrace"> Show TRACE level<span class="tooltip">TRACE logs show very granular details like every mouse movement and keystroke. Creates a lot of noise - only enable if specifically needed.</span></label>
         <span class="help-link" id="helpBtn">Help & Info</span>
       </div>
-      <div id="filterStats" style="margin-top:8px;font-size:11px;color:var(--muted);display:none;">
-        <span id="filterStatsText"></span>
+      <div id="filterStats" class="filter-stats-box" style="display:none;">
+        <div class="filter-stats-header">
+          <span id="filterStatsText"></span>
+          <span class="filter-toggle" id="filterDetailsToggle" onclick="toggleFilterDetails()">What was removed?</span>
+        </div>
+        <div id="filterDetails" class="filter-details" style="display:none;">
+          <p><strong>Noise patterns removed:</strong></p>
+          <ul>
+            <li><code>WindowsInput.cpp</code> - Mouse/keyboard coordinates logged every second</li>
+            <li><code>InputExtension.h</code> - Routine input tracking checks</li>
+            <li><code>Heart beat</code> - Keep-alive messages sent regularly</li>
+            <li><code>Response: 200/201/204</code> - Successful API calls (we keep errors)</li>
+            <li><code>Check CURL Response</code> - Routine network checks</li>
+            <li><code>StorageIO.*Wrote</code> - Routine database writes (except Location/TrackedActivity)</li>
+            <li><code>Storage.h.*Read</code> - Routine database reads</li>
+            <li><code>HelperClient.cpp</code> - Routine extension checks (unless contains URL/APP)</li>
+          </ul>
+          <p><strong>Why filter?</strong> These lines appear hundreds/thousands of times and don't help diagnose issues. The "signal" (errors, warnings, screenshots, tracking events) is preserved.</p>
+        </div>
       </div>
       <div class="search-box" style="margin-top:12px;">
         <div class="search-input-wrapper has-tooltip">
@@ -520,6 +580,35 @@
           <table>
             <thead><tr><th>Time</th><th>Type</th><th>Content</th></tr></thead>
             <tbody id="appsBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="collapsible-section">
+      <div class="collapsible-header collapsed" onclick="toggleSection('injected')">
+        <h3><span>🤖</span> Injected Input Activity</h3>
+        <div class="header-meta">
+          <span class="badge" id="injectedCount">0</span>
+          <span class="chevron">▼</span>
+        </div>
+      </div>
+      <div class="collapsible-content collapsed" id="injectedContent">
+        <div id="injectedExplainer" class="explainer-box">
+          <h4>What is "Injected Input"?</h4>
+          <p>Windows can detect when keyboard/mouse input comes from software rather than physical devices:</p>
+          <ul>
+            <li><strong>Real input (R)</strong> - Actual keyboard/mouse from the user</li>
+            <li><strong>Injected input (I)</strong> - Software-generated input from another process</li>
+            <li><strong>Low-integrity injected (LI)</strong> - Input from unverified/untrusted sources</li>
+          </ul>
+          <p><strong>Common legitimate causes:</strong> Remote desktop, accessibility tools, automation software, gaming mice/keyboards with macros, screen sharing.</p>
+          <p><strong>⚠️ Note:</strong> Injected input is NOT automatically cheating. Many legitimate tools inject input. Look for patterns like: consistently 100% activity, same screenshots repeating, or injected input with zero real input.</p>
+        </div>
+        <div class="table-wrap" style="max-height:250px;">
+          <table>
+            <thead><tr><th>Time</th><th>Type</th><th>Details</th></tr></thead>
+            <tbody id="injectedBody"></tbody>
           </table>
         </div>
       </div>
@@ -990,6 +1079,26 @@
           techDetail: null
         });
       }
+
+      // === INJECTED INPUT ===
+      if (data.injected.length > 0) {
+        const onlyInjected = data.injected.filter(e => e.msg.toLowerCase().includes('only injected'));
+        const simulated = data.injected.filter(e => e.msg.toLowerCase().includes('simulated'));
+        
+        let desc = `Detected ${data.injected.length} injected/simulated input event${data.injected.length > 1 ? 's' : ''}.`;
+        if (onlyInjected.length > 0) desc += ` ${onlyInjected.length} showed ONLY injected input (no real input).`;
+        
+        findings.push({
+          severity: onlyInjected.length > 10 ? 'warning' : 'info',
+          icon: '🤖',
+          title: `Injected Input: ${data.injected.length} Events`,
+          description: desc + ` <strong>Common causes:</strong> Remote desktop, accessibility tools, automation software, gaming peripherals with macros.`,
+          action: onlyInjected.length > 10 ? 
+            'High number of "only injected" events. Check if user is using remote desktop or automation tools. Review screenshots for patterns.' : 
+            'Some injected input detected. This is often normal - check the Injected Input section for details.',
+          techDetail: data.injected.slice(0,5).map(e => `${fmtTime(e.ts)}: ${e.msg.slice(0,80)}`).join('\n')
+        });
+      }
       
       // Check for critical issues
       const watchdogHits = data.errors.filter(e => e.msg.toLowerCase().includes('watchdog'));
@@ -1229,6 +1338,7 @@
         locations: [],
         apps: [],
         tracking: [],
+        injected: [],
         sessions: [],
         idleDecisions: [],
         idleKeptSecs: 0,
@@ -1407,10 +1517,11 @@
         $('sessionsBody').innerHTML = '';
         $('idleBody').innerHTML = '';
         // Reset badge counts
-        ['errors', 'warnings', 'screenshots', 'network', 'locations', 'apps', 'tracking', 'search', 'sessions'].forEach(s => {
+        ['errors', 'warnings', 'screenshots', 'network', 'locations', 'apps', 'injected', 'tracking', 'search', 'sessions'].forEach(s => {
           const badge = $(s + 'Count');
           if (badge) badge.textContent = '0';
         });
+        $('injectedBody').innerHTML = '';
         return;
       }
 
@@ -1433,6 +1544,7 @@
       $('networkCount').textContent = data.network.length;
       $('locationsCount').textContent = data.locations.length;
       $('appsCount').textContent = data.apps.length;
+      $('injectedCount').textContent = data.injected.length;
       $('trackingCount').textContent = data.tracking.length;
       $('sessionsCount').textContent = data.sessions.length;
 
@@ -1440,6 +1552,7 @@
       $('errorsCount').className = 'badge ' + (data.errors.length > 0 ? 'danger' : '');
       $('warningsCount').className = 'badge ' + (data.warnings.length > 0 ? 'warn' : '');
       $('networkCount').className = 'badge ' + (data.network.length > 0 ? 'warn' : '');
+      $('injectedCount').className = 'badge ' + (data.injected.length > 0 ? 'warn' : '');
 
       if (data.startTime && data.endTime) {
         const diffMs = data.endTime - data.startTime;
@@ -1648,6 +1761,21 @@
         `;
       }).join('') || '<tr><td colspan="3" style="color:var(--muted)">No app/URL events found</td></tr>';
 
+      // Injected Input
+      $('injectedBody').innerHTML = data.injected.slice(0, 100).map(e => {
+        let type = 'Injected';
+        if (e.msg.toLowerCase().includes('simulated')) type = 'Simulated';
+        else if (e.msg.toLowerCase().includes('partially')) type = 'Partial';
+        else if (e.msg.toLowerCase().includes('only injected')) type = 'Only Injected';
+        return `
+          <tr>
+            <td>${fmtTime(e.ts)}</td>
+            <td><span class="tag warn">${type}</span></td>
+            <td style="font-size:11px;max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(e.msg)}</td>
+          </tr>
+        `;
+      }).join('') || '<tr><td colspan="3" style="color:var(--success)">✓ No injected input detected</td></tr>';
+
       // Tracking
       $('trackingBody').innerHTML = data.tracking.slice(0, 50).map(e => {
         let eventType = 'Event';
@@ -1775,6 +1903,19 @@
       const content = $(`${section}Content`);
       header.classList.toggle('collapsed');
       content.classList.toggle('collapsed');
+    };
+
+    // Toggle filter details
+    window.toggleFilterDetails = function() {
+      const details = $('filterDetails');
+      const toggle = $('filterDetailsToggle');
+      if (details.style.display === 'none') {
+        details.style.display = 'block';
+        toggle.textContent = 'Hide details';
+      } else {
+        details.style.display = 'none';
+        toggle.textContent = 'What was removed?';
+      }
     };
 
     // Expand section (used when searching)
