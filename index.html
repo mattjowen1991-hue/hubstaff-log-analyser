@@ -564,9 +564,47 @@
     <footer>
       <span>Hubstaff Client Log Analyzer</span>
       <span style="margin:0 10px;">|</span>
-      <span>For hubstaff.log analysis</span>
+      <span class="help-link" id="privacyBtn">🔒 Privacy Info</span>
     </footer>
   </main>
+
+  <div class="modal-overlay" id="privacyModal">
+    <div class="modal" style="max-width:550px;">
+      <button class="close-btn" id="closePrivacy">Close</button>
+      <h2>🔒 Privacy & Data Security</h2>
+      <h3>Your data stays on your device</h3>
+      <p>This tool runs <strong>entirely in your web browser</strong>. When you paste log data:</p>
+      <ul>
+        <li>✅ Data is processed locally on your computer</li>
+        <li>✅ Nothing is sent to any server</li>
+        <li>✅ No data is stored in cookies or browser storage</li>
+        <li>✅ No tracking or analytics</li>
+      </ul>
+      <h3>What happens when you click "Clear"</h3>
+      <ul>
+        <li>The text input is emptied</li>
+        <li>All parsed data is overwritten in memory</li>
+        <li>All displayed results are removed</li>
+        <li>A confirmation message appears</li>
+      </ul>
+      <h3>What happens when you close the page</h3>
+      <ul>
+        <li>All data is automatically cleared</li>
+        <li>Nothing persists after you leave</li>
+        <li>No data remains in browser history</li>
+      </ul>
+      <h3>Best practices</h3>
+      <ul>
+        <li>Click <strong>"Clear"</strong> when you're done analyzing</li>
+        <li>Close the browser tab when finished</li>
+        <li>Avoid sharing screenshots that show email addresses or PII</li>
+      </ul>
+      <div style="background:rgba(34,197,94,0.1); border:1px solid var(--success); border-radius:8px; padding:12px; margin-top:16px;">
+        <p style="margin:0; color:var(--success);"><strong>✅ Safe to use with sensitive logs</strong></p>
+        <p style="margin:8px 0 0 0; font-size:12px;">This tool is designed for support teams handling customer data. Your logs never leave your browser.</p>
+      </div>
+    </div>
+  </div>
 
   <div class="info-box" id="infoBox">
     <h4 id="infoTitle">Event Details</h4>
@@ -1751,6 +1789,10 @@
     $('closeHelp').onclick = () => $('helpModal').classList.remove('visible');
     $('helpModal').onclick = e => { if (e.target === $('helpModal')) $('helpModal').classList.remove('visible'); };
 
+    $('privacyBtn').onclick = () => $('privacyModal').classList.add('visible');
+    $('closePrivacy').onclick = () => $('privacyModal').classList.remove('visible');
+    $('privacyModal').onclick = e => { if (e.target === $('privacyModal')) $('privacyModal').classList.remove('visible'); };
+
     // Timeline zoom controls
     $('zoomSlider').oninput = function() {
       $('timelineContent').style.width = (this.value * 100) + '%';
@@ -1794,6 +1836,25 @@
         e.preventDefault();
         $('analyzeBtn').click();
       }
+    });
+
+    // Clear all data when page is closed
+    window.addEventListener('beforeunload', () => {
+      $('logInput').value = '';
+      if (allLines) allLines.length = 0;
+      if (parsedData) {
+        if (parsedData.errors) parsedData.errors.length = 0;
+        if (parsedData.warnings) parsedData.warnings.length = 0;
+        if (parsedData.screenshots) parsedData.screenshots.length = 0;
+        if (parsedData.network) parsedData.network.length = 0;
+        if (parsedData.locations) parsedData.locations.length = 0;
+        if (parsedData.apps) parsedData.apps.length = 0;
+        if (parsedData.tracking) parsedData.tracking.length = 0;
+        if (parsedData.sessions) parsedData.sessions.length = 0;
+        if (parsedData.idleDecisions) parsedData.idleDecisions.length = 0;
+      }
+      parsedData = null;
+      allLines = [];
     });
   </script>
 </body>
