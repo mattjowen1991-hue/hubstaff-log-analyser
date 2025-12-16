@@ -85,6 +85,49 @@
     .section-title { font-size: 13px; color: var(--muted); margin-bottom: 10px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
     .section-title span { color: var(--accent); }
 
+    .collapsible-section { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 12px; overflow: hidden; background: var(--card); }
+    .collapsible-header { 
+      display: flex; 
+      align-items: center; 
+      justify-content: space-between;
+      padding: 12px 16px; 
+      background: var(--panel); 
+      cursor: pointer; 
+      user-select: none;
+      transition: background 0.2s;
+    }
+    .collapsible-header:hover { background: #251535; }
+    .collapsible-header h3 { 
+      font-size: 13px; 
+      font-weight: 600; 
+      color: var(--text); 
+      display: flex; 
+      align-items: center; 
+      gap: 8px; 
+      margin: 0;
+    }
+    .collapsible-header h3 span { color: var(--accent); }
+    .collapsible-header .header-meta { display: flex; align-items: center; gap: 12px; }
+    .collapsible-header .badge { 
+      background: var(--accent-dim); 
+      color: #fff; 
+      padding: 2px 8px; 
+      border-radius: 10px; 
+      font-size: 11px; 
+      font-weight: 600;
+    }
+    .collapsible-header .badge.danger { background: var(--danger); }
+    .collapsible-header .badge.warn { background: var(--warn); color: #000; }
+    .collapsible-header .badge.success { background: var(--success); }
+    .collapsible-header .chevron { 
+      color: var(--muted); 
+      transition: transform 0.2s; 
+      font-size: 18px;
+    }
+    .collapsible-header.collapsed .chevron { transform: rotate(-90deg); }
+    .collapsible-content { padding: 16px; }
+    .collapsible-content.collapsed { display: none; }
+
     .table-wrap { max-height: 400px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; }
     table { width: 100%; border-collapse: collapse; font-size: 12px; }
     th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border); }
@@ -270,29 +313,37 @@
       <div id="summaryContent"></div>
     </div>
 
-    <div class="card" id="sessionsCard" style="display:none;">
-      <div class="section-title"><span>⏱️</span> Tracking Sessions</div>
-      <div id="sessionExplainer" class="explainer-box" style="display:none;"></div>
-      <div class="table-wrap" style="max-height:300px;">
-        <table>
-          <thead><tr><th>#</th><th>Start</th><th>Stop</th><th>Duration</th><th>Stop Reason</th></tr></thead>
-          <tbody id="sessionsBody"></tbody>
-        </table>
+    <div class="collapsible-section" id="sessionsCard" style="display:none;">
+      <div class="collapsible-header" onclick="toggleSection('sessions')">
+        <h3><span>⏱️</span> Tracking Sessions</h3>
+        <div class="header-meta">
+          <span class="badge" id="sessionsCount">0</span>
+          <span class="chevron">▼</span>
+        </div>
       </div>
-      <div id="stopReasonLegend" class="legend-box-inline" style="margin-top:10px; font-size:11px; color:var(--muted); display:none;">
-        <strong>Stop Reasons:</strong> 
-        <span class="tag success" style="margin-left:8px;">User stopped</span> = Normal stop, logged by app as user-initiated. 
-        <span class="tag warn" style="margin-left:8px;">Went idle</span> = Idle timeout triggered. 
-        <span class="tag error" style="margin-left:8px;">⚠️ Crashed</span> = No stop event found, likely crashed.
-        <span style="margin-left:8px;">⚡ = Very short session (&lt;30s)</span>
-      </div>
-      <div style="margin-top:12px; padding-top:12px; border-top:1px dashed var(--border);">
-        <div class="section-title" style="margin-bottom:8px;"><span>💤</span> Idle Time Decisions</div>
-        <div class="table-wrap" style="max-height:200px;">
+      <div class="collapsible-content" id="sessionsContent">
+        <div id="sessionExplainer" class="explainer-box" style="display:none;"></div>
+        <div class="table-wrap" style="max-height:300px;">
           <table>
-            <thead><tr><th>Time</th><th>Idle Duration</th><th>Decision</th></tr></thead>
-            <tbody id="idleBody"></tbody>
+            <thead><tr><th>#</th><th>Start</th><th>Stop</th><th>Duration</th><th>Stop Reason</th></tr></thead>
+            <tbody id="sessionsBody"></tbody>
           </table>
+        </div>
+        <div id="stopReasonLegend" class="legend-box-inline" style="margin-top:10px; font-size:11px; color:var(--muted); display:none;">
+          <strong>Stop Reasons:</strong> 
+          <span class="tag success" style="margin-left:8px;">User stopped</span> = Normal stop, logged by app as user-initiated. 
+          <span class="tag warn" style="margin-left:8px;">Went idle</span> = Idle timeout triggered. 
+          <span class="tag error" style="margin-left:8px;">⚠️ Crashed</span> = No stop event found, likely crashed.
+          <span style="margin-left:8px;">⚡ = Very short session (&lt;30s)</span>
+        </div>
+        <div style="margin-top:12px; padding-top:12px; border-top:1px dashed var(--border);">
+          <div class="section-title" style="margin-bottom:8px;"><span>💤</span> Idle Time Decisions</div>
+          <div class="table-wrap" style="max-height:200px;">
+            <table>
+              <thead><tr><th>Time</th><th>Idle Duration</th><th>Decision</th></tr></thead>
+              <tbody id="idleBody"></tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
@@ -334,78 +385,138 @@
     </div>
 
     <div class="grid-2">
-      <div class="card">
-        <div class="section-title"><span>🚨</span> Errors & Critical Issues</div>
-        <div id="errorsSection">
-          <div class="category-content" id="errorsList" style="max-height:350px;"></div>
+      <div class="collapsible-section">
+        <div class="collapsible-header" onclick="toggleSection('errors')">
+          <h3><span>🚨</span> Errors & Critical Issues</h3>
+          <div class="header-meta">
+            <span class="badge danger" id="errorsCount">0</span>
+            <span class="chevron">▼</span>
+          </div>
+        </div>
+        <div class="collapsible-content" id="errorsContent">
+          <div class="category-content" id="errorsList" style="max-height:350px; overflow-y:auto;"></div>
         </div>
       </div>
 
-      <div class="card">
-        <div class="section-title"><span>⚠️</span> Warnings & Anomalies</div>
-        <div id="warningsSection">
-          <div class="category-content" id="warningsList" style="max-height:350px;"></div>
+      <div class="collapsible-section">
+        <div class="collapsible-header" onclick="toggleSection('warnings')">
+          <h3><span>⚠️</span> Warnings & Anomalies</h3>
+          <div class="header-meta">
+            <span class="badge warn" id="warningsCount">0</span>
+            <span class="chevron">▼</span>
+          </div>
+        </div>
+        <div class="collapsible-content" id="warningsContent">
+          <div class="category-content" id="warningsList" style="max-height:350px; overflow-y:auto;"></div>
         </div>
       </div>
     </div>
 
-    <div class="card">
-      <div class="section-title"><span>📸</span> Screenshots & Screen Capture</div>
-      <div class="table-wrap" style="max-height:250px;">
-        <table>
-          <thead><tr><th>Time</th><th>Event</th><th>Details</th></tr></thead>
-          <tbody id="screenshotsBody"></tbody>
-        </table>
+    <div class="collapsible-section">
+      <div class="collapsible-header collapsed" onclick="toggleSection('screenshots')">
+        <h3><span>📸</span> Screenshots & Screen Capture</h3>
+        <div class="header-meta">
+          <span class="badge" id="screenshotsCount">0</span>
+          <span class="chevron">▼</span>
+        </div>
+      </div>
+      <div class="collapsible-content collapsed" id="screenshotsContent">
+        <div class="table-wrap" style="max-height:250px;">
+          <table>
+            <thead><tr><th>Time</th><th>Event</th><th>Details</th></tr></thead>
+            <tbody id="screenshotsBody"></tbody>
+          </table>
+        </div>
       </div>
     </div>
 
-    <div class="card">
-      <div class="section-title"><span>🌐</span> Network & API Activity</div>
-      <div class="table-wrap" style="max-height:250px;">
-        <table>
-          <thead><tr><th>Time</th><th>Status</th><th>Details</th></tr></thead>
-          <tbody id="networkBody"></tbody>
-        </table>
+    <div class="collapsible-section">
+      <div class="collapsible-header collapsed" onclick="toggleSection('network')">
+        <h3><span>🌐</span> Network & API Activity</h3>
+        <div class="header-meta">
+          <span class="badge" id="networkCount">0</span>
+          <span class="chevron">▼</span>
+        </div>
+      </div>
+      <div class="collapsible-content collapsed" id="networkContent">
+        <div class="table-wrap" style="max-height:250px;">
+          <table>
+            <thead><tr><th>Time</th><th>Status</th><th>Details</th></tr></thead>
+            <tbody id="networkBody"></tbody>
+          </table>
+        </div>
       </div>
     </div>
 
-    <div class="card">
-      <div class="section-title"><span>📍</span> Locations & Job Sites</div>
-      <div class="table-wrap" style="max-height:200px;">
-        <table>
-          <thead><tr><th>Time</th><th>Event</th><th>Details</th></tr></thead>
-          <tbody id="locationsBody"></tbody>
-        </table>
+    <div class="collapsible-section">
+      <div class="collapsible-header collapsed" onclick="toggleSection('locations')">
+        <h3><span>📍</span> Locations & Job Sites</h3>
+        <div class="header-meta">
+          <span class="badge" id="locationsCount">0</span>
+          <span class="chevron">▼</span>
+        </div>
+      </div>
+      <div class="collapsible-content collapsed" id="locationsContent">
+        <div class="table-wrap" style="max-height:200px;">
+          <table>
+            <thead><tr><th>Time</th><th>Event</th><th>Details</th></tr></thead>
+            <tbody id="locationsBody"></tbody>
+          </table>
+        </div>
       </div>
     </div>
 
-    <div class="card">
-      <div class="section-title"><span>🖥️</span> URLs & Applications</div>
-      <div class="table-wrap" style="max-height:250px;">
-        <table>
-          <thead><tr><th>Time</th><th>Type</th><th>Content</th></tr></thead>
-          <tbody id="appsBody"></tbody>
-        </table>
+    <div class="collapsible-section">
+      <div class="collapsible-header collapsed" onclick="toggleSection('apps')">
+        <h3><span>🖥️</span> URLs & Applications</h3>
+        <div class="header-meta">
+          <span class="badge" id="appsCount">0</span>
+          <span class="chevron">▼</span>
+        </div>
+      </div>
+      <div class="collapsible-content collapsed" id="appsContent">
+        <div class="table-wrap" style="max-height:250px;">
+          <table>
+            <thead><tr><th>Time</th><th>Type</th><th>Content</th></tr></thead>
+            <tbody id="appsBody"></tbody>
+          </table>
+        </div>
       </div>
     </div>
 
-    <div class="card">
-      <div class="section-title"><span>⏱️</span> Time Tracking Events</div>
-      <div class="table-wrap" style="max-height:250px;">
-        <table>
-          <thead><tr><th>Time</th><th>Event</th><th>Details</th></tr></thead>
-          <tbody id="trackingBody"></tbody>
-        </table>
+    <div class="collapsible-section">
+      <div class="collapsible-header collapsed" onclick="toggleSection('tracking')">
+        <h3><span>📝</span> Raw Tracking Events</h3>
+        <div class="header-meta">
+          <span class="badge" id="trackingCount">0</span>
+          <span class="chevron">▼</span>
+        </div>
+      </div>
+      <div class="collapsible-content collapsed" id="trackingContent">
+        <div class="table-wrap" style="max-height:250px;">
+          <table>
+            <thead><tr><th>Time</th><th>Event</th><th>Details</th></tr></thead>
+            <tbody id="trackingBody"></tbody>
+          </table>
+        </div>
       </div>
     </div>
 
-    <div class="card">
-      <div class="section-title"><span>🔎</span> Search Results</div>
-      <div class="table-wrap" style="max-height:300px;">
-        <table>
-          <thead><tr><th>Time</th><th>Level</th><th>Source</th><th>Message</th></tr></thead>
-          <tbody id="searchBody"></tbody>
-        </table>
+    <div class="collapsible-section">
+      <div class="collapsible-header collapsed" onclick="toggleSection('search')">
+        <h3><span>🔎</span> Search Results</h3>
+        <div class="header-meta">
+          <span class="badge" id="searchCount">0</span>
+          <span class="chevron">▼</span>
+        </div>
+      </div>
+      <div class="collapsible-content collapsed" id="searchContent">
+        <div class="table-wrap" style="max-height:300px;">
+          <table>
+            <thead><tr><th>Time</th><th>Level</th><th>Source</th><th>Message</th></tr></thead>
+            <tbody id="searchBody"></tbody>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -1216,6 +1327,11 @@
         $('sessionsCard').style.display = 'none';
         $('sessionsBody').innerHTML = '';
         $('idleBody').innerHTML = '';
+        // Reset badge counts
+        ['errors', 'warnings', 'screenshots', 'network', 'locations', 'apps', 'tracking', 'search', 'sessions'].forEach(s => {
+          const badge = $(s + 'Count');
+          if (badge) badge.textContent = '0';
+        });
         return;
       }
 
@@ -1230,6 +1346,21 @@
       $('kpiIdleDisc').textContent = fmtDuration(data.idleDiscardedSecs);
       $('kpiTimezone').textContent = data.timezone || 'Unknown';
       $('kpiTimezone').style.fontSize = data.timezone ? '18px' : '14px';
+
+      // Update badge counts
+      $('errorsCount').textContent = data.errors.length;
+      $('warningsCount').textContent = data.warnings.length;
+      $('screenshotsCount').textContent = data.screenshots.length;
+      $('networkCount').textContent = data.network.length;
+      $('locationsCount').textContent = data.locations.length;
+      $('appsCount').textContent = data.apps.length;
+      $('trackingCount').textContent = data.tracking.length;
+      $('sessionsCount').textContent = data.sessions.length;
+
+      // Update badge colors based on counts
+      $('errorsCount').className = 'badge ' + (data.errors.length > 0 ? 'danger' : '');
+      $('warningsCount').className = 'badge ' + (data.warnings.length > 0 ? 'warn' : '');
+      $('networkCount').className = 'badge ' + (data.network.length > 0 ? 'warn' : '');
 
       if (data.startTime && data.endTime) {
         const diffMs = data.endTime - data.startTime;
@@ -1337,6 +1468,8 @@
       } else {
         $('sessionsCard').style.display = 'block';
         $('sessionsBody').innerHTML = '<tr><td colspan="5" style="color:var(--muted)">No tracking sessions found in log</td></tr>';
+        $('sessionExplainer').style.display = 'none';
+        $('stopReasonLegend').style.display = 'none';
       }
 
       // === RENDER IDLE DECISIONS TABLE ===
@@ -1462,11 +1595,17 @@
     function search(query) {
       if (!query.trim()) {
         $('searchBody').innerHTML = '<tr><td colspan="4" style="color:var(--muted)">Enter a search term above</td></tr>';
+        $('searchCount').textContent = '0';
         return;
       }
 
       const q = query.toLowerCase();
       const results = allLines.filter(line => line.toLowerCase().includes(q)).slice(0, 200);
+
+      $('searchCount').textContent = results.length;
+      
+      // Auto-expand search section when searching
+      expandSection('search');
 
       if (!results.length) {
         $('searchBody').innerHTML = `<tr><td colspan="4" style="color:var(--muted)">No results for "${escapeHtml(query)}"</td></tr>`;
@@ -1550,6 +1689,22 @@
       const el = $('tech-' + idx);
       if (el) el.classList.toggle('visible');
     };
+
+    // Toggle collapsible sections
+    window.toggleSection = function(section) {
+      const header = document.querySelector(`#${section}Content`).previousElementSibling;
+      const content = $(`${section}Content`);
+      header.classList.toggle('collapsed');
+      content.classList.toggle('collapsed');
+    };
+
+    // Expand section (used when searching)
+    function expandSection(section) {
+      const header = document.querySelector(`#${section}Content`).previousElementSibling;
+      const content = $(`${section}Content`);
+      header.classList.remove('collapsed');
+      content.classList.remove('collapsed');
+    }
 
     $('helpBtn').onclick = () => $('helpModal').classList.add('visible');
     $('closeHelp').onclick = () => $('helpModal').classList.remove('visible');
