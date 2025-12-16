@@ -66,7 +66,33 @@
       border: 6px solid transparent;
       border-top-color: var(--accent);
     }
+    .has-tooltip .tooltip.tooltip-bottom::after {
+      top: auto;
+      bottom: 100%;
+      border-top-color: transparent;
+      border-bottom-color: var(--accent);
+    }
+    .has-tooltip .tooltip.tooltip-bottom {
+      bottom: auto;
+      top: calc(100% + 8px);
+    }
     .has-tooltip:hover .tooltip { display: block; }
+    
+    .search-input-wrapper { flex: 1; position: relative; }
+    .search-input-wrapper input { width: 100%; }
+    .search-input-wrapper .tooltip { 
+      width: 280px; 
+      left: 0; 
+      transform: none;
+      text-align: left;
+    }
+    .search-input-wrapper .tooltip code {
+      background: var(--bg);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-size: 11px;
+      color: var(--link);
+    }
     
     .help-link { color: var(--accent); text-decoration: underline; cursor: pointer; margin-left: auto; }
 
@@ -291,7 +317,22 @@
         <span id="filterStatsText"></span>
       </div>
       <div class="search-box" style="margin-top:12px;">
-        <input type="text" id="searchInput" placeholder="Search logs (e.g., 'error', 'screenshot', 'URL:')...">
+        <div class="search-input-wrapper has-tooltip">
+          <input type="text" id="searchInput" placeholder="Search logs (e.g., 'error', 'screenshot', 'URL:')...">
+          <span class="tooltip tooltip-bottom">
+            <strong>🔎 Search Tips:</strong><br><br>
+            Search through ALL log lines (even filtered ones) for specific text.<br><br>
+            <strong>Useful searches:</strong><br>
+            • <code>error</code> - Find all errors<br>
+            • <code>URL:</code> - Find tracked websites<br>
+            • <code>TITLE:</code> - Find window titles<br>
+            • <code>Discard</code> - Find rejected time<br>
+            • <code>screenshot</code> - Find capture events<br>
+            • <code>watchdog</code> - Find freeze events<br>
+            • <code>Response: 5</code> - Find server errors<br><br>
+            <em>Results auto-expand below. Max 200 results shown.</em>
+          </span>
+        </div>
         <button id="searchBtn">Search</button>
         <button id="clearSearchBtn">Clear</button>
       </div>
