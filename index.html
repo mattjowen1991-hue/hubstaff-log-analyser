@@ -38,6 +38,36 @@
     .toggle-row { display: flex; align-items: center; gap: 16px; margin-top: 10px; font-size: 13px; color: var(--muted); flex-wrap: wrap; }
     .toggle-row label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
     .toggle-row input[type="checkbox"] { accent-color: var(--accent); }
+    
+    .has-tooltip { position: relative; }
+    .has-tooltip .tooltip { 
+      display: none; 
+      position: absolute; 
+      bottom: calc(100% + 8px); 
+      left: 50%; 
+      transform: translateX(-50%); 
+      background: var(--panel); 
+      border: 1px solid var(--accent); 
+      border-radius: 8px; 
+      padding: 10px 12px; 
+      font-size: 11px; 
+      color: var(--text); 
+      width: 240px; 
+      z-index: 100; 
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+      line-height: 1.5;
+    }
+    .has-tooltip .tooltip::after {
+      content: '';
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      border: 6px solid transparent;
+      border-top-color: var(--accent);
+    }
+    .has-tooltip:hover .tooltip { display: block; }
+    
     .help-link { color: var(--accent); text-decoration: underline; cursor: pointer; margin-left: auto; }
 
     .filter-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
@@ -162,6 +192,28 @@
 
     .plain-explanation { font-size: 11px; color: var(--accent); margin-top: 4px; padding: 6px 10px; background: rgba(168,85,247,0.1); border-radius: 4px; border-left: 2px solid var(--accent); }
 
+    .explainer-box {
+      background: rgba(168,85,247,0.1);
+      border: 1px solid var(--accent-dim);
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin-bottom: 12px;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+    .explainer-box h4 { color: var(--accent); margin: 0 0 8px 0; font-size: 13px; }
+    .explainer-box p { margin: 6px 0; color: var(--text); }
+    .explainer-box .key-point { color: var(--warn); font-weight: 600; }
+    .explainer-box ul { margin: 8px 0 8px 20px; color: var(--muted); }
+    .explainer-box li { margin: 4px 0; }
+
+    .legend-box-inline {
+      background: rgba(0,0,0,0.2);
+      padding: 10px 12px;
+      border-radius: 6px;
+      line-height: 1.8;
+    }
+
     footer { text-align: center; padding: 20px; border-top: 1px solid var(--border); margin-top: 20px; font-size: 12px; color: var(--muted); }
 
     ::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -188,8 +240,8 @@
       <div class="toggle-row">
         <label><input type="checkbox" id="autoFilter" checked> Auto-filter noise</label>
         <label><input type="checkbox" id="plainMode" checked> 🎯 Plain English mode</label>
-        <label><input type="checkbox" id="showDebug"> Show DEBUG level</label>
-        <label><input type="checkbox" id="showTrace"> Show TRACE level</label>
+        <label class="has-tooltip"><input type="checkbox" id="showDebug"> Show DEBUG level<span class="tooltip">DEBUG logs show detailed app operations like API calls, file reads, and internal processes. Usually only needed for deep technical investigation.</span></label>
+        <label class="has-tooltip"><input type="checkbox" id="showTrace"> Show TRACE level<span class="tooltip">TRACE logs show very granular details like every mouse movement and keystroke. Creates a lot of noise - only enable if specifically needed.</span></label>
         <span class="help-link" id="helpBtn">Help & Info</span>
       </div>
       <div id="filterStats" style="margin-top:8px;font-size:11px;color:var(--muted);display:none;">
@@ -220,11 +272,19 @@
 
     <div class="card" id="sessionsCard" style="display:none;">
       <div class="section-title"><span>⏱️</span> Tracking Sessions</div>
+      <div id="sessionExplainer" class="explainer-box" style="display:none;"></div>
       <div class="table-wrap" style="max-height:300px;">
         <table>
           <thead><tr><th>#</th><th>Start</th><th>Stop</th><th>Duration</th><th>Stop Reason</th></tr></thead>
           <tbody id="sessionsBody"></tbody>
         </table>
+      </div>
+      <div id="stopReasonLegend" class="legend-box-inline" style="margin-top:10px; font-size:11px; color:var(--muted); display:none;">
+        <strong>Stop Reasons:</strong> 
+        <span class="tag success" style="margin-left:8px;">User stopped</span> = Normal stop, logged by app as user-initiated. 
+        <span class="tag warn" style="margin-left:8px;">Went idle</span> = Idle timeout triggered. 
+        <span class="tag error" style="margin-left:8px;">⚠️ Crashed</span> = No stop event found, likely crashed.
+        <span style="margin-left:8px;">⚡ = Very short session (&lt;30s)</span>
       </div>
       <div style="margin-top:12px; padding-top:12px; border-top:1px dashed var(--border);">
         <div class="section-title" style="margin-bottom:8px;"><span>💤</span> Idle Time Decisions</div>
@@ -633,12 +693,15 @@
       
       // === TRACKING SUMMARY ===
       const totalTrackedSecs = data.sessions.reduce((sum, s) => sum + (s.duration || 0), 0);
+      const logDurationSecs = (data.endTime - data.startTime) / 1000;
+      
       if (data.sessions.length > 0) {
         const crashedSessions = data.sessions.filter(s => s.stopReason === 'CRASHED' || s.stopReason === 'LOG_END');
         const idleStops = data.sessions.filter(s => s.stopReason === 'IDLE');
         const resumedStarts = data.sessions.filter(s => s.startReason === 'RESUMED');
+        const userStops = data.sessions.filter(s => s.stopReason === 'USER');
         
-        let sessionDesc = `Found ${data.sessions.length} tracking session${data.sessions.length > 1 ? 's' : ''} totaling ${fmtDuration(totalTrackedSecs)}.`;
+        let sessionDesc = `Found ${data.sessions.length} tracking session${data.sessions.length > 1 ? 's' : ''} totaling <strong>${fmtDuration(totalTrackedSecs)}</strong>.`;
         if (resumedStarts.length > 0) sessionDesc += ` ${resumedStarts.length} session(s) were recovered after a crash.`;
         if (idleStops.length > 0) sessionDesc += ` ${idleStops.length} stopped due to idle timeout.`;
         
@@ -648,6 +711,67 @@
           title: `Tracked Time: ${fmtDuration(totalTrackedSecs)}`,
           description: sessionDesc,
           action: crashedSessions.length > 0 ? 'Some sessions may have ended unexpectedly. Check the Sessions table below for details.' : null,
+          techDetail: null
+        });
+        
+        // === LOG DURATION VS TRACKED TIME COMPARISON ===
+        if (logDurationSecs > 600 && totalTrackedSecs < logDurationSecs * 0.1) {
+          // Log covers significant time but very little was tracked
+          findings.push({
+            severity: 'info',
+            icon: '📊',
+            title: `Log Duration: ${fmtDuration(logDurationSecs)} vs Tracked: ${fmtDuration(totalTrackedSecs)}`,
+            description: `The log file spans <strong>${fmtDuration(logDurationSecs)}</strong>, but only <strong>${fmtDuration(totalTrackedSecs)}</strong> was actually tracked. This is normal - the app continues logging background activity (app focus, URL detection, system monitoring) even when the timer is not running. <strong>Only time between START and STOP events counts as tracked time.</strong>`,
+            action: 'The difference does NOT mean time was lost. Background logs help with diagnostics but do not represent billable time.',
+            techDetail: null
+          });
+        }
+        
+        // === USER STOP EXPLANATION ===
+        if (userStops.length > 0) {
+          const shortSessions = userStops.filter(s => s.duration < 30);
+          if (shortSessions.length > 0) {
+            findings.push({
+              severity: 'info',
+              icon: '🛑',
+              title: `${shortSessions.length} Very Short Session${shortSessions.length > 1 ? 's' : ''} (Stopped by USER)`,
+              description: `Found ${shortSessions.length} session${shortSessions.length > 1 ? 's' : ''} under 30 seconds that ended with stop reason "USER". <strong>What "USER" means:</strong> The stop was logged as a normal user-initiated stop. If the app had crashed or auto-stopped due to errors, we would see different markers (CRASHED, ERROR, CONFIG, or missing stop events).`,
+              action: 'If the user disputes stopping manually, this could indicate: accidental click, mouse/trackpad issue, or another person/process interacting with the app. Network errors, CPU usage, or timezone issues do NOT cause USER stop events.',
+              techDetail: shortSessions.map(s => `${fmtTime(s.start)} → ${fmtTime(s.stop)} (${Math.round(s.duration)}s)`).join('\n')
+            });
+          }
+        }
+        
+        // === CRASH INDICATOR CHECK ===
+        const hasCrashMarkers = data.errors.some(e => 
+          e.msg.toLowerCase().includes('crash') || 
+          e.msg.toLowerCase().includes('watchdog') ||
+          e.msg.toLowerCase().includes('unclean') ||
+          e.msg.toLowerCase().includes('resume_detected')
+        );
+        const hasResumeEvents = data.tracking.some(e => 
+          e.msg.toLowerCase().includes('resume_detected') || 
+          e.msg.toLowerCase().includes('resumed')
+        );
+        
+        if (!hasCrashMarkers && !hasResumeEvents && crashedSessions.length === 0) {
+          findings.push({
+            severity: 'success',
+            icon: '✅',
+            title: 'No Crash Indicators Found',
+            description: 'The logs show no signs of app crashes, force-quits, or unexpected terminations. All sessions have proper START and STOP events. If the app had crashed, we would expect to see: STARTUP_UNCLEAN, RESUME_DETECTED, watchdog hits, or missing STOP events.',
+            action: null,
+            techDetail: null
+          });
+        }
+      } else {
+        // No sessions found
+        findings.push({
+          severity: 'warning',
+          icon: '⏱️',
+          title: 'No Tracking Sessions Found',
+          description: `The log spans <strong>${fmtDuration(logDurationSecs)}</strong> but no START_TRACKING/STOP_TRACKING pairs were detected. This could mean: the timer was never started during this period, or the log file doesn't contain the tracking events.`,
+          action: 'Check if this is the correct log file for the time period in question.',
           techDetail: null
         });
       }
@@ -1135,6 +1259,49 @@
       // === RENDER SESSIONS TABLE ===
       if (data.sessions.length > 0) {
         $('sessionsCard').style.display = 'block';
+        $('stopReasonLegend').style.display = plainMode ? 'block' : 'none';
+        
+        // Calculate log duration vs tracked time
+        const logDurationSecs = data.startTime && data.endTime ? (data.endTime - data.startTime) / 1000 : 0;
+        const totalTrackedSecs = data.sessions.reduce((sum, s) => sum + (s.duration || 0), 0);
+        const hasShortUserStops = data.sessions.some(s => s.stopReason === 'USER' && s.duration < 60);
+        
+        // Show explainer if there's a big mismatch or short USER stops
+        if (plainMode && (logDurationSecs > 600 && totalTrackedSecs < logDurationSecs * 0.1) || hasShortUserStops) {
+          let explainerHtml = '<h4>📖 Understanding These Results</h4>';
+          
+          if (logDurationSecs > 600 && totalTrackedSecs < logDurationSecs * 0.1) {
+            explainerHtml += `
+              <p><span class="key-point">Why does the log cover ${fmtDuration(logDurationSecs)} but only ${fmtDuration(totalTrackedSecs)} was tracked?</span></p>
+              <p>The Hubstaff app continuously logs background activity (app focus, URLs, system status) even when the timer is <strong>not</strong> running. This is normal diagnostic behavior.</p>
+              <ul>
+                <li>Only time between START_TRACKING and STOP_TRACKING counts as billable time</li>
+                <li>Background logs do NOT represent lost or missing time</li>
+                <li>The ${fmtDuration(logDurationSecs)} log window includes all app activity, not just tracked time</li>
+              </ul>
+            `;
+          }
+          
+          if (hasShortUserStops) {
+            const shortSessions = data.sessions.filter(s => s.stopReason === 'USER' && s.duration < 60);
+            explainerHtml += `
+              <p><span class="key-point">What does "User stopped" mean?</span></p>
+              <p>The stop was logged as a normal, user-initiated stop. This is <strong>not</strong> a crash or error.</p>
+              <ul>
+                <li>If the app had crashed → we'd see "Crashed" or missing stop events</li>
+                <li>If an error caused it → we'd see error markers in the stop reason</li>
+                <li>Network errors, high CPU, or timezone issues do NOT cause "User stopped" events</li>
+              </ul>
+              <p>If the user disputes stopping manually, possible explanations include: accidental click, trackpad sensitivity, another user, or remote access software.</p>
+            `;
+          }
+          
+          $('sessionExplainer').innerHTML = explainerHtml;
+          $('sessionExplainer').style.display = 'block';
+        } else {
+          $('sessionExplainer').style.display = 'none';
+        }
+        
         $('sessionsBody').innerHTML = data.sessions.map((s, i) => {
           const stopReasonCls = s.stopReason === 'USER' ? 'success' : 
                                 s.stopReason === 'IDLE' ? 'warn' : 
@@ -1143,8 +1310,12 @@
           const startReasonBadge = s.startReason === 'RESUMED' ? '<span class="tag audit" style="margin-left:4px;">RESUMED</span>' : '';
           
           let stopReasonText = s.stopReason;
+          let stopReasonTooltip = '';
           if (plainMode) {
-            if (s.stopReason === 'USER') stopReasonText = 'User stopped';
+            if (s.stopReason === 'USER') {
+              stopReasonText = 'User stopped';
+              stopReasonTooltip = 'Logged as normal user stop. Not a crash or error.';
+            }
             else if (s.stopReason === 'IDLE') stopReasonText = 'Went idle';
             else if (s.stopReason === 'CRASHED') stopReasonText = '⚠️ Crashed';
             else if (s.stopReason === 'LOG_END') stopReasonText = '⚠️ Still running?';
@@ -1153,12 +1324,14 @@
             else if (s.stopReason === 'SHUTDOWN') stopReasonText = 'App closed';
           }
           
+          const durationWarning = s.duration < 30 ? ' ⚡' : '';
+          
           return `<tr>
             <td>${i + 1}${startReasonBadge}</td>
             <td>${fmtTime(s.start)}</td>
             <td>${s.stop ? fmtTime(s.stop) : '--'}</td>
-            <td><span class="tag success">${fmtDuration(s.duration)}</span></td>
-            <td><span class="tag ${stopReasonCls}">${stopReasonText}</span></td>
+            <td><span class="tag success">${fmtDuration(s.duration)}${durationWarning}</span></td>
+            <td><span class="tag ${stopReasonCls}" ${stopReasonTooltip ? `title="${stopReasonTooltip}"` : ''}>${stopReasonText}</span></td>
           </tr>`;
         }).join('');
       } else {
